@@ -14,7 +14,10 @@ async def get_api_key(api_key_header: str = Security(api_key_header)):
     if VALID_API_KEY is None:
         return api_key_header
     
-    if api_key_header == VALID_API_KEY:
+    safe_incoming = str(api_key_header).strip() if api_key_header else ""
+    safe_expected = str(VALID_API_KEY).strip() if VALID_API_KEY else ""
+    
+    if safe_incoming == safe_expected:
         return api_key_header
     
     print(f"Auth: Unauthorized access attempt. Received: '{incoming_key}', Expected: '{expected_prefix}'")
