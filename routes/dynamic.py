@@ -20,7 +20,7 @@ def row_to_dict(cursor, row):
             try:
                 val = val.decode('utf-8')
             except UnicodeDecodeError:
-                val = base64.b64encode(val).decode('utf-8')
+                val = val.hex().upper()
         d[col[0].lower()] = val
     return d
 
