@@ -17,8 +17,9 @@ def list_tables():
     """
     Retrieve a list of all existing table names in the current database user schema.
     """
-    conn = get_db_connection()
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT table_name FROM user_tables")
         tables = [row[0] for row in cursor.fetchall()]
@@ -31,8 +32,9 @@ def create_row(table_name: str, row: Union[Dict[str, Any], List[Dict[str, Any]]]
     """
     Create new row(s) in the specified table.
     """
-    conn = get_db_connection()
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         is_list = isinstance(row, list)
@@ -72,7 +74,8 @@ def create_row(table_name: str, row: Union[Dict[str, Any], List[Dict[str, Any]]]
         conn.commit()
         return inserted_rows if is_list else inserted_rows[0]
     except Exception as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         release_db_connection(conn)
@@ -82,8 +85,9 @@ def list_rows(table_name: str, skip: int = 0, limit: int = 0):
     """
     Retrieve rows in the table.
     """
-    conn = get_db_connection()
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         table_safe = table_name.replace('"', '')
         
@@ -108,8 +112,9 @@ def show_row(table_name: str, id: str):
     """
     Retrieve a specific row by its ROWID masquerading as ID.
     """
-    conn = get_db_connection()
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         table_safe = table_name.replace('"', '')
         
@@ -136,8 +141,9 @@ def update_row(table_name: str, id: str, row: Dict[str, Any] = Body(...)):
     if not row:
         return show_row(table_name, id)
 
-    conn = get_db_connection()
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         table_safe = table_name.replace('"', '')
         
@@ -157,7 +163,8 @@ def update_row(table_name: str, id: str, row: Dict[str, Any] = Body(...)):
         
         return show_row(table_name, id)
     except Exception as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         release_db_connection(conn)
@@ -167,8 +174,9 @@ def delete_table(table_name: str):
     """
     Drop a table from the database.
     """
-    conn = get_db_connection()
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         table_safe = table_name.replace('"', '')
         cursor.execute(f'DROP TABLE "{table_safe}" PURGE')
@@ -183,8 +191,9 @@ def delete_all_rows(table_name: str):
     """
     Delete all rows in a table.
     """
-    conn = get_db_connection()
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         table_safe = table_name.replace('"', '')
         cursor.execute(f'TRUNCATE TABLE "{table_safe}"')
@@ -200,8 +209,9 @@ def delete_row(table_name: str, id: str):
     """
     Remove a row from the table by its ROWID.
     """
-    conn = get_db_connection()
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         table_safe = table_name.replace('"', '')
         
@@ -213,7 +223,8 @@ def delete_row(table_name: str, id: str):
         conn.commit()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         release_db_connection(conn)
