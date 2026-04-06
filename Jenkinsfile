@@ -54,19 +54,9 @@ pipeline {
                     withCredentials([
                         string(credentialsId: "REGISTRY_USER", variable: 'REGISTRY_USER'),
                         string(credentialsId: "REGISTRY_PASSWORD", variable: 'REGISTRY_PASSWORD'),
-                        // string(credentialsId: "${env.ENV_TYPE}_VAULT_ADDR", variable: 'VAULT_ADDR'),
-                        // string(credentialsId: "${env.ENV_TYPE}_VAULT_PATH", variable: 'VAULT_PATH'),
-                        // string(credentialsId: "${env.ENV_TYPE}_VAULT_TOKEN", variable: 'VAULT_TOKEN'),
-                        // string(credentialsId: "${env.ENV_TYPE}_SERVER_IP", variable: 'SERVER_IP'),
-                        // string(credentialsId: "${env.ENV_TYPE}_SERVER_USER", variable: 'SERVER_USER'),
                     ]) {
                         env.REGISTRY_USER = env.REGISTRY_USER
                         env.REGISTRY_PASSWORD = env.REGISTRY_PASSWORD
-                        // env.VAULT_ADDR = env.VAULT_ADDR
-                        // env.VAULT_PATH = env.VAULT_PATH
-                        // env.VAULT_TOKEN = env.VAULT_TOKEN
-                        // env.SERVER_IP = env.SERVER_IP
-                        // env.SERVER_USER = env.SERVER_USER
                         echo "Building for environment: ${env.ENV_TYPE}"
                     }
                 }
@@ -86,29 +76,6 @@ pipeline {
                         url: env.REPO_ADDRESS
                     ]]
                 ])  
-            }
-        }
-        // sonarqube stage
-        stage('Build & SonarQube Analysis') {
-            steps {
-                echo 'Starting build and SonarQube analysis...'
-                script {
-                    try {
-                        withSonarQubeEnv('CSA-sonar') {
-                            sh '''
-                            ${SONAR_SCANNER_HOME}/bin/sonar-scanner \
-                            -Dsonar.projectKey=oracle-client \
-                            -Dsonar.sources=. \
-                            -Dsonar.host.url=${SONAR_HOST_URL} \
-                            -Dsonar.token=${SONAR_TOKEN}
-                            '''
-                        }
-                        echo 'SonarQube analysis completed successfully.'
-                    } catch (Exception e) {
-                        echo "Error during build or SonarQube analysis: ${e.message}"
-                        echo 'Build or SonarQube analysis failed.'
-                    }
-                }
             }
         }
         // Stage to set the commit SHA as the image tag
