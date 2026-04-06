@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body, HTTPException, status, Response
 from typing import List, Dict, Any, Union
 from database import get_db_connection, release_db_connection
 import oracledb
+import base64
 
 router = APIRouter()
 
@@ -9,7 +10,18 @@ def row_to_dict(cursor, row):
     """Convert a row tuple to dictionary based on cursor description."""
     d = {}
     for idx, col in enumerate(cursor.description):
-        d[col[0].lower()] = row[idx]
+        val = row[idx]
+        if hasattr(val, 'read'):
+            try:
+                val = val.read()
+            except Exception:
+                val = str(val)
+        if isinstance(val, bytes):
+            try:
+                val = val.decode('utf-8')
+            except UnicodeDecodeError:
+                val = base64.b64encode(val).decode('utf-8')
+        d[col[0].lower()] = val
     return d
 
 @router.get("/_sys/tables", response_description="List all tables", summary="List tables", response_model=List[str])
