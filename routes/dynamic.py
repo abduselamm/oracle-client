@@ -2,7 +2,6 @@ from fastapi import APIRouter, Body, HTTPException, status, Response
 from typing import List, Dict, Any, Union
 from database import get_db_connection, release_db_connection
 import oracledb
-import cx_Oracle # For type hints if needed, oracledb is a drop in replacement
 
 router = APIRouter()
 
