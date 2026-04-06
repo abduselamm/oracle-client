@@ -20,6 +20,13 @@ async def get_api_key(api_key_header: str = Security(api_key_header)):
     if safe_incoming == safe_expected:
         return api_key_header
     
+    print("--- DEBUG AUTH MISMATCH ---")
+    print(f"Raw Incoming (from UI):  {repr(api_key_header)}")
+    print(f"Raw Expected (from DB):  {repr(VALID_API_KEY)}")
+    print(f"Stripped Incoming:       {repr(safe_incoming)}")
+    print(f"Stripped Expected:       {repr(safe_expected)}")
+    print("---------------------------")
+    
     print(f"Auth: Unauthorized access attempt. Received: '{incoming_key}', Expected: '{expected_prefix}'")
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
