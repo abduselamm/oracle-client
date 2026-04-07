@@ -21,7 +21,7 @@ def row_to_dict(cursor, row):
                 val = val.decode('utf-8')
             except UnicodeDecodeError:
                 val = val.hex().upper()
-        d[col[0].lower()] = val
+        d[col[0]] = val
     return d
 
 @router.get("/_sys/tables", response_description="List all tables", summary="List tables", response_model=List[str])
