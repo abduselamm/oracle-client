@@ -3,6 +3,23 @@ from typing import List, Dict, Any, Union
 from database import get_db_connection, release_db_connection
 import oracledb
 import base64
+from datetime import datetime
+
+def parse_iso_dates(values):
+    """Attempt to parse ISO string dates into datetime objects for safe DB binding."""
+    for i, val in enumerate(values):
+        if isinstance(val, str):
+            if "T" in val and len(val) >= 19:
+                try:
+                    values[i] = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                except ValueError:
+                    pass
+            elif len(val) == 10 and val.count("-") == 2:
+                try:
+                    values[i] = datetime.strptime(val, "%Y-%m-%d")
+                except ValueError:
+                    pass
+    return values
 
 router = APIRouter()
 
@@ -58,7 +75,7 @@ def create_row(table_name: str, row: Union[Dict[str, Any], List[Dict[str, Any]]]
         inserted_rows = []
         for doc in docs:
             columns = list(doc.keys())
-            values = list(doc.values())
+            values = parse_iso_dates(list(doc.values()))
             
             # Handle potential SQL injection if table_name or columns are not sanitized. 
             # In a generic tool, we assume trusted schema names, but we should sanitize quotes.
@@ -160,7 +177,7 @@ def update_row(table_name: str, id: str, row: Dict[str, Any] = Body(...)):
         table_safe = table_name.replace('"', '')
         
         columns = list(row.keys())
-        values = list(row.values())
+        values = parse_iso_dates(list(row.values()))
         
         set_clause = ", ".join([f'"{c}" = :{i+1}' for i, c in enumerate(columns)])
         values.append(id) # for the WHERE clause
