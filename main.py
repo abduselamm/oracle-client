@@ -18,11 +18,15 @@ async def get_api_key(request: Request, api_key_header: str = Security(api_key_h
     is_admin = (safe_incoming == safe_valid and safe_valid != "")
     is_qa = (safe_incoming == safe_qa and safe_qa != "")
 
+    print(f"Auth check: incoming={safe_incoming[:4]}... matches admin={is_admin}, matches qa={is_qa}")
+
     if is_admin:
+        print("Auth: Matches ADMIN key.")
         request.state.read_only = False
         return api_key_header
     
     if is_qa:
+        print("Auth: Matches QA key. Setting read_only=True")
         # Check if the method is permitted
         if request.method not in ["GET", "OPTIONS"]:
             raise HTTPException(
@@ -100,11 +104,13 @@ async def startup_db_client():
     else:
         print(f"Oracle: Warning! Connection pool is NOT ready.")
 
-@app.get("/info", tags=["Root"])
+@app.get(f"{PREFIX}/info", tags=["Root"])
 async def get_info(request: Request, _ = Depends(get_api_key)):
+    read_only = getattr(request.state, "read_only", False)
+    print(f"DEBUG: /info called. read_only={read_only}")
     return {
-        "read_only": getattr(request.state, "read_only", False),
-        "env": "QA" if getattr(request.state, "read_only", False) else "PROD/DEV"
+        "read_only": read_only,
+        "env": "QA" if read_only else "PROD/DEV"
     }
 
 @app.get("/", tags=["Root"])
