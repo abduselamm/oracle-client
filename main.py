@@ -1,33 +1,42 @@
 from fastapi import FastAPI, Depends, HTTPException, Security, status
 from fastapi.security.api_key import APIKeyHeader
 from routes.dynamic import router as dynamic_router
-from database import VALID_API_KEY, APP_ROOT_PATH, ORACLE_CONN_STRING, pool
+from database import VALID_API_KEY, QA_API_KEY, APP_ROOT_PATH, ORACLE_CONN_STRING, pool
+from fastapi import Request
 
 API_KEY_NAME = "X-API-KEY"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-async def get_api_key(api_key_header: str = Security(api_key_header)):
+async def get_api_key(request: Request, api_key_header: str = Security(api_key_header)):
     # Debug logging
     incoming_key = api_key_header if api_key_header else "MISSING"
-    expected_prefix = str(VALID_API_KEY)[:3] + "..." if VALID_API_KEY else "NONE"
-    
-    if VALID_API_KEY is None:
-        return api_key_header
     
     safe_incoming = str(api_key_header).strip() if api_key_header else ""
-    safe_expected = str(VALID_API_KEY).strip() if VALID_API_KEY else ""
+    safe_valid = str(VALID_API_KEY).strip() if VALID_API_KEY else ""
+    safe_qa = str(QA_API_KEY).strip() if QA_API_KEY else ""
     
-    if safe_incoming == safe_expected:
+    is_admin = (safe_incoming == safe_valid and safe_valid != "")
+    is_qa = (safe_incoming == safe_qa and safe_qa != "")
+
+    if is_admin:
+        request.state.read_only = False
         return api_key_header
     
+    if is_qa:
+        # Check if the method is permitted
+        if request.method not in ["GET", "OPTIONS"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Read-Only access: Mutation not allowed on QA environment",
+            )
+        request.state.read_only = True
+        return api_key_header
+
+    # If neither matches
     print("--- DEBUG AUTH MISMATCH ---")
-    print(f"Raw Incoming (from UI):  {repr(api_key_header)}")
-    print(f"Raw Expected (from DB):  {repr(VALID_API_KEY)}")
-    print(f"Stripped Incoming:       {repr(safe_incoming)}")
-    print(f"Stripped Expected:       {repr(safe_expected)}")
+    print(f"Raw Incoming: {repr(api_key_header)}")
     print("---------------------------")
     
-    print(f"Auth: Unauthorized access attempt. Received: '{incoming_key}', Expected: '{expected_prefix}'")
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid API Key",
@@ -41,7 +50,8 @@ if PREFIX and not PREFIX.startswith("/"):
 # Log configuration on module load
 print(f"--- Configuration ---")
 print(f"ORACLE_URI: {'[HIDDEN]' if ORACLE_CONN_STRING else 'NOT SET'}")
-print(f"API_KEY: {'[SET]' if VALID_API_KEY else 'NOT SET'}")
+print(f"ADMIN_API_KEY: {'[SET]' if VALID_API_KEY else 'NOT SET'}")
+print(f"QA_API_KEY: {'[SET]' if QA_API_KEY else 'NOT SET'}")
 print(f"APP_ROOT_PATH: '{APP_ROOT_PATH}'")
 print(f"Computed PREFIX: '{PREFIX}'")
 print(f"---------------------")
@@ -89,6 +99,13 @@ async def startup_db_client():
         print(f"Oracle: Connection pool is ready.")
     else:
         print(f"Oracle: Warning! Connection pool is NOT ready.")
+
+@app.get("/info", tags=["Root"])
+async def get_info(request: Request, _ = Depends(get_api_key)):
+    return {
+        "read_only": getattr(request.state, "read_only", False),
+        "env": "QA" if getattr(request.state, "read_only", False) else "PROD/DEV"
+    }
 
 @app.get("/", tags=["Root"])
 async def read_root():
