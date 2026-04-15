@@ -27,13 +27,16 @@ async def get_api_key(request: Request, api_key_header: str = Security(api_key_h
     
     if is_qa:
         print("Auth: Matches QA key. Setting read_only=True")
-        # Check if the method is permitted
-        if request.method not in ["GET", "OPTIONS"]:
+        # Allow POST to /query endpoint specifically for the worksheet
+        is_query_path = request.url.path.endswith("/query")
+        
+        if request.method not in ["GET", "OPTIONS"] and not is_query_path:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Read-Only access: Mutation not allowed on QA environment",
             )
         request.state.read_only = True
+        request.state.is_qa = True
         return api_key_header
 
     # If neither matches
@@ -107,10 +110,12 @@ async def startup_db_client():
 @app.get(f"{PREFIX}/info", tags=["Root"])
 async def get_info(request: Request, _ = Depends(get_api_key)):
     read_only = getattr(request.state, "read_only", False)
-    print(f"DEBUG: /info called. read_only={read_only}")
+    is_qa = getattr(request.state, "is_qa", False)
+    print(f"DEBUG: /info called. read_only={read_only}, is_qa={is_qa}")
     return {
         "read_only": read_only,
-        "env": "QA" if read_only else "PROD/DEV"
+        "is_qa": is_qa,
+        "env": "QA" if is_qa else "PROD/DEV"
     }
 
 @app.get("/", tags=["Root"])

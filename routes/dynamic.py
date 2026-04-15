@@ -45,53 +45,37 @@ def row_to_dict(cursor, row):
 @router.post("/query", response_description="Execute raw SQL query", summary="Raw SQL Executor")
 def execute_query(request: Request, body: Dict[str, Any] = Body(...)):
     """
-    Execute a raw SQL query. For QA users, only SELECT statements are allowed.
+    Execute a raw SQL query. Only accessible to QA users.
+    Allows both SELECT and mutations (DELETE, UPDATE, etc.).
     """
+    is_qa = getattr(request.state, "is_qa", False)
+    if not is_qa:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Access Denied: SQL Worksheet is only available for QA environment."
+        )
+
     sql = body.get("sql", "").strip()
     if not sql:
         raise HTTPException(status_code=400, detail="SQL query is required")
 
-    read_only = getattr(request.state, "read_only", False)
-    
-    if read_only:
-        # Basic check to prevent mutations in QA
-        # First, remove comments
-        sql_clean = re.sub(r'--.*', '', sql)
-        sql_clean = re.sub(r'/\*.*?\*/', '', sql_clean, flags=re.DOTALL)
-        sql_clean = sql_clean.strip()
-        
-        if not sql_clean.upper().startswith("SELECT") and not sql_clean.upper().startswith("WITH"):
-            raise HTTPException(
-                status_code=403, 
-                detail="Read-Only access: Only SELECT statements are allowed in QA environment"
-            )
-        
-        # Further check for forbidden keywords in the query to prevent subqueries with mutations
-        # This is a bit naive but better than nothing
-        forbidden = ["UPDATE", "INSERT", "DELETE", "DROP", "TRUNCATE", "ALTER", "CREATE", "GRANT", "REVOKE"]
-        for word in forbidden:
-            if re.search(r'\b' + word + r'\b', sql_clean.upper()):
-                raise HTTPException(
-                    status_code=403, 
-                    detail=f"Read-Only access: Mutation keyword '{word}' detected"
-                )
-
-    conn = None
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
-        
         cursor.execute(sql)
         
-        # Check if it's a select query by looking for description
+        # If the cursor has a description, it's a SELECT (or something returning rows)
         if cursor.description:
             rows = cursor.fetchall()
             return [row_to_dict(cursor, row) for row in rows]
         else:
-            # For non-select (if allowed), return row count or success
-            conn.commit()
-            return {"status": "Success", "rowcount": cursor.rowcount}
+            # It's a mutation (INSERT, UPDATE, DELETE, etc.)
+            rowcount = cursor.rowcount
+            conn.commit() # Ensure changes are persisted
+            return {"status": "Success", "message": "Statement executed successfully.", "rowcount": rowcount}
             
+    except oracledb.Error as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         if conn:
             conn.rollback()
