@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Body, HTTPException, status, Response
+from fastapi import APIRouter, Body, HTTPException, status, Response, Request
 from typing import List, Dict, Any, Union
 from database import get_db_connection, release_db_connection
 import oracledb
 import base64
+import re
 from datetime import datetime
+
+router = APIRouter()
 
 def parse_iso_dates(values):
     """Attempt to parse ISO string dates into datetime objects for safe DB binding."""
@@ -20,8 +23,6 @@ def parse_iso_dates(values):
                 except ValueError:
                     pass
     return values
-
-router = APIRouter()
 
 def row_to_dict(cursor, row):
     """Convert a row tuple to dictionary based on cursor description."""
@@ -40,6 +41,63 @@ def row_to_dict(cursor, row):
                 val = val.hex().upper()
         d[col[0]] = val
     return d
+
+@router.post("/query", response_description="Execute raw SQL query", summary="Raw SQL Executor")
+def execute_query(request: Request, body: Dict[str, Any] = Body(...)):
+    """
+    Execute a raw SQL query. For QA users, only SELECT statements are allowed.
+    """
+    sql = body.get("sql", "").strip()
+    if not sql:
+        raise HTTPException(status_code=400, detail="SQL query is required")
+
+    read_only = getattr(request.state, "read_only", False)
+    
+    if read_only:
+        # Basic check to prevent mutations in QA
+        # First, remove comments
+        sql_clean = re.sub(r'--.*', '', sql)
+        sql_clean = re.sub(r'/\*.*?\*/', '', sql_clean, flags=re.DOTALL)
+        sql_clean = sql_clean.strip()
+        
+        if not sql_clean.upper().startswith("SELECT") and not sql_clean.upper().startswith("WITH"):
+            raise HTTPException(
+                status_code=403, 
+                detail="Read-Only access: Only SELECT statements are allowed in QA environment"
+            )
+        
+        # Further check for forbidden keywords in the query to prevent subqueries with mutations
+        # This is a bit naive but better than nothing
+        forbidden = ["UPDATE", "INSERT", "DELETE", "DROP", "TRUNCATE", "ALTER", "CREATE", "GRANT", "REVOKE"]
+        for word in forbidden:
+            if re.search(r'\b' + word + r'\b', sql_clean.upper()):
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"Read-Only access: Mutation keyword '{word}' detected"
+                )
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(sql)
+        
+        # Check if it's a select query by looking for description
+        if cursor.description:
+            rows = cursor.fetchall()
+            return [row_to_dict(cursor, row) for row in rows]
+        else:
+            # For non-select (if allowed), return row count or success
+            conn.commit()
+            return {"status": "Success", "rowcount": cursor.rowcount}
+            
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        release_db_connection(conn)
 
 @router.get("/_sys/tables", response_description="List all tables", summary="List tables", response_model=List[str])
 def list_tables():
