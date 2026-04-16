@@ -23,6 +23,25 @@ def parse_iso_dates(values):
                 except ValueError:
                     pass
     return values
+    
+def handle_db_error(e, conn=None):
+    """Unified error handling for database operations."""
+    if conn:
+        conn.rollback()
+        
+    if isinstance(e, oracledb.Error):
+        error_obj = e.args[0]
+        # Extract message and offset if it's an oracledb error object
+        err_msg = getattr(error_obj, 'message', str(e))
+        err_offset = getattr(error_obj, 'offset', None)
+        
+        detail = f"{err_msg}"
+        if err_offset is not None:
+             detail += f" (at offset {err_offset})"
+        raise HTTPException(status_code=400, detail=detail)
+    
+    # Generic exception
+    raise HTTPException(status_code=400, detail=str(e))
 
 def row_to_dict(cursor, row):
     """Convert a row tuple to dictionary based on cursor description."""
@@ -74,12 +93,8 @@ def execute_query(request: Request, body: Dict[str, Any] = Body(...)):
             conn.commit() # Ensure changes are persisted
             return {"status": "Success", "message": "Statement executed successfully.", "rowcount": rowcount}
             
-    except oracledb.Error as e:
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        handle_db_error(e, conn)
     finally:
         release_db_connection(conn)
 
@@ -145,9 +160,7 @@ def create_row(table_name: str, row: Union[Dict[str, Any], List[Dict[str, Any]]]
         conn.commit()
         return inserted_rows if is_list else inserted_rows[0]
     except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        handle_db_error(e, conn)
     finally:
         release_db_connection(conn)
 
@@ -197,7 +210,7 @@ def show_row(table_name: str, id: str):
             
         return row_to_dict(cursor, row)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        handle_db_error(e, conn)
     finally:
         release_db_connection(conn)
 
@@ -234,9 +247,7 @@ def update_row(table_name: str, id: str, row: Dict[str, Any] = Body(...)):
         
         return show_row(table_name, id)
     except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        handle_db_error(e, conn)
     finally:
         release_db_connection(conn)
 
@@ -253,7 +264,7 @@ def delete_table(table_name: str):
         cursor.execute(f'DROP TABLE "{table_safe}" PURGE')
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        handle_db_error(e, conn)
     finally:
         release_db_connection(conn)
 
@@ -271,7 +282,7 @@ def delete_all_rows(table_name: str):
         # Maybe TRUNCATE doesn't return row count, so returning a simple success response
         return {"deleted": True}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        handle_db_error(e, conn)
     finally:
         release_db_connection(conn)
 
@@ -294,8 +305,6 @@ def delete_row(table_name: str, id: str):
         conn.commit()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        handle_db_error(e, conn)
     finally:
         release_db_connection(conn)
