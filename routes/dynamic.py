@@ -58,8 +58,13 @@ def row_to_dict(cursor, row):
                 val = val.decode('utf-8')
             except UnicodeDecodeError:
                 val = val.hex().upper()
+        if col[0] == "_id" and isinstance(val, str):
+            val = val.replace('/', '_').replace('+', '-')
         d[col[0]] = val
     return d
+
+def decode_rowid(safe_id: str) -> str:
+    return safe_id.replace('_', '/').replace('-', '+')
 
 @router.post("/query", response_description="Execute raw SQL query", summary="Raw SQL Executor")
 def execute_query(request: Request, body: Dict[str, Any] = Body(...)):
@@ -191,7 +196,7 @@ def list_rows(table_name: str, skip: int = 0, limit: int = 0):
     finally:
         release_db_connection(conn)
 
-@router.get("/{table_name}/{id:path}", response_description="Get a single row", summary="Get row by ID", response_model=Dict[str, Any])
+@router.get("/{table_name}/{id}", response_description="Get a single row", summary="Get row by ID", response_model=Dict[str, Any])
 def show_row(table_name: str, id: str):
     """
     Retrieve a specific row by its ROWID masquerading as ID.
@@ -201,8 +206,9 @@ def show_row(table_name: str, id: str):
         conn = get_db_connection()
         cursor = conn.cursor()
         table_safe = table_name.replace('"', '')
+        real_id = decode_rowid(id)
         
-        cursor.execute(f'SELECT "{table_safe}".*, ROWIDTOCHAR(rowid) as "_id" FROM "{table_safe}" WHERE rowid = CHARTOROWID(:1)', [id])
+        cursor.execute(f'SELECT "{table_safe}".*, ROWIDTOCHAR(rowid) as "_id" FROM "{table_safe}" WHERE rowid = CHARTOROWID(:1)', [real_id])
         row = cursor.fetchone()
         
         if row is None:
@@ -214,7 +220,7 @@ def show_row(table_name: str, id: str):
     finally:
         release_db_connection(conn)
 
-@router.patch("/{table_name}/{id:path}", response_description="Update a row", summary="Update row", response_model=Dict[str, Any])
+@router.patch("/{table_name}/{id}", response_description="Update a row", summary="Update row", response_model=Dict[str, Any])
 def update_row(table_name: str, id: str, row: Dict[str, Any] = Body(...)):
     """
     Update an existing row by its ROWID.
@@ -230,12 +236,13 @@ def update_row(table_name: str, id: str, row: Dict[str, Any] = Body(...)):
         conn = get_db_connection()
         cursor = conn.cursor()
         table_safe = table_name.replace('"', '')
+        real_id = decode_rowid(id)
         
         columns = list(row.keys())
         values = parse_iso_dates(list(row.values()))
         
         set_clause = ", ".join([f'"{c}" = :{i+1}' for i, c in enumerate(columns)])
-        values.append(id) # for the WHERE clause
+        values.append(real_id) # for the WHERE clause
         
         sql = f'UPDATE "{table_safe}" SET {set_clause} WHERE rowid = CHARTOROWID(:{len(values)})'
         cursor.execute(sql, values)
@@ -286,7 +293,7 @@ def delete_all_rows(table_name: str):
     finally:
         release_db_connection(conn)
 
-@router.delete("/{table_name}/{id:path}", response_description="Delete a row", summary="Delete row")
+@router.delete("/{table_name}/{id}", response_description="Delete a row", summary="Delete row")
 def delete_row(table_name: str, id: str):
     """
     Remove a row from the table by its ROWID.
@@ -296,8 +303,9 @@ def delete_row(table_name: str, id: str):
         conn = get_db_connection()
         cursor = conn.cursor()
         table_safe = table_name.replace('"', '')
+        real_id = decode_rowid(id)
         
-        cursor.execute(f'DELETE FROM "{table_safe}" WHERE rowid = CHARTOROWID(:1)', [id])
+        cursor.execute(f'DELETE FROM "{table_safe}" WHERE rowid = CHARTOROWID(:1)', [real_id])
         
         if cursor.rowcount == 0:
              raise HTTPException(status_code=404, detail=f"Row {id} not found in {table_name}")
