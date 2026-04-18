@@ -50,20 +50,23 @@ def resolve_oracle_conn_string(secrets):
 def resolve_api_key(secrets):
     valid_key = secrets.get("API_KEY") or os.environ.get("API_KEY")
     qa_key = secrets.get("MONGO_API_KEY") or os.environ.get("MONGO_API_KEY")
+    uat_key = secrets.get("UAT_API_KEY") or os.environ.get("UAT_API_KEY")
     
     if "API_KEY" in secrets:
         print(f"Vault: Found API_KEY in secret.")
     if "MONGO_API_KEY" in secrets:
         print(f"Vault: Found MONGO_API_KEY in secret.")
+    if "UAT_API_KEY" in secrets:
+        print(f"Vault: Found UAT_API_KEY in secret.")
         
-    return valid_key, qa_key
+    return valid_key, qa_key, uat_key
 
 # 3. Root Path
 def resolve_root_path(secrets):
     return "/api/v1/oracle-client"
 
 ORACLE_CONN_STRING = resolve_oracle_conn_string(VAULT_SECRETS)
-VALID_API_KEY, QA_API_KEY = resolve_api_key(VAULT_SECRETS)
+VALID_API_KEY, QA_API_KEY, UAT_API_KEY = resolve_api_key(VAULT_SECRETS)
 APP_ROOT_PATH = resolve_root_path(VAULT_SECRETS)
 
 # Establish connection pool using oracledb
