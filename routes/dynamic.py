@@ -191,7 +191,7 @@ def list_rows(table_name: str, skip: int = 0, limit: int = 0):
     finally:
         release_db_connection(conn)
 
-@router.get("/{table_name}/{id}", response_description="Get a single row", summary="Get row by ID", response_model=Dict[str, Any])
+@router.get("/{table_name}/{id:path}", response_description="Get a single row", summary="Get row by ID", response_model=Dict[str, Any])
 def show_row(table_name: str, id: str):
     """
     Retrieve a specific row by its ROWID masquerading as ID.
@@ -214,7 +214,7 @@ def show_row(table_name: str, id: str):
     finally:
         release_db_connection(conn)
 
-@router.patch("/{table_name}/{id}", response_description="Update a row", summary="Update row", response_model=Dict[str, Any])
+@router.patch("/{table_name}/{id:path}", response_description="Update a row", summary="Update row", response_model=Dict[str, Any])
 def update_row(table_name: str, id: str, row: Dict[str, Any] = Body(...)):
     """
     Update an existing row by its ROWID.
@@ -286,7 +286,7 @@ def delete_all_rows(table_name: str):
     finally:
         release_db_connection(conn)
 
-@router.delete("/{table_name}/{id}", response_description="Delete a row", summary="Delete row")
+@router.delete("/{table_name}/{id:path}", response_description="Delete a row", summary="Delete row")
 def delete_row(table_name: str, id: str):
     """
     Remove a row from the table by its ROWID.
