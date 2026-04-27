@@ -80,6 +80,9 @@ def execute_query(request: Request, body: Dict[str, Any] = Body(...)):
         )
 
     sql = body.get("sql", "").strip()
+    if sql.endswith(";"):
+        sql = sql[:-1].strip()
+        
     if not sql:
         raise HTTPException(status_code=400, detail="SQL query is required")
 
