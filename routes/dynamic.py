@@ -69,14 +69,14 @@ def decode_rowid(safe_id: str) -> str:
 @router.post("/query", response_description="Execute raw SQL query", summary="Raw SQL Executor")
 def execute_query(request: Request, body: Dict[str, Any] = Body(...)):
     """
-    Execute a raw SQL query. Only accessible to QA users.
+    Execute a raw SQL query.
     Allows both SELECT and mutations (DELETE, UPDATE, etc.).
     """
-    is_qa = getattr(request.state, "is_qa", False)
-    if not is_qa:
+    is_read_only = getattr(request.state, "read_only", False)
+    if is_read_only:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Access Denied: SQL Worksheet is only available for QA environment."
+            detail="Access Denied: SQL Worksheet is not available for read-only users."
         )
 
     sql = body.get("sql", "").strip()

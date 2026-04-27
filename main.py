@@ -30,10 +30,7 @@ async def get_api_key(request: Request, api_key_header: str = Security(api_key_h
     if is_qa or is_uat:
         env_name = "QA" if is_qa else "UAT"
         print(f"Auth: Matches {env_name} key. Setting read_only=True")
-        # Allow POST to /query endpoint specifically for the worksheet
-        is_query_path = request.url.path.endswith("/query")
-        
-        if request.method not in ["GET", "OPTIONS"] and not is_query_path:
+        if request.method not in ["GET", "OPTIONS"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Read-Only access: Mutation not allowed on {env_name} environment",
